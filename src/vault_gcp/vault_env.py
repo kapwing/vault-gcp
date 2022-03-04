@@ -112,7 +112,7 @@ class VaultEnv():
 
         print(f'Finished Retrieving Secrets')
 
-    def get_secret(secret_path, vault_token=None):
+    def get_secret(self, secret_path, vault_token=None):
         vault_token = vault_token or self.vault_token
         headers = {"X-Vault-Token": vault_token}
         url = f'{VAULT_ADDR}/v1/{secret_path}'
@@ -121,7 +121,7 @@ class VaultEnv():
         secretdata = r.json()
         return secretdata
     
-    def update_secret(secret_path, data, vault_token=None):
+    def update_secret(self, secret_path, data, vault_token=None):
         vault_token = vault_token or self.vault_token
         headers = {"X-Vault-Token": vault_token}
         url = f'{VAULT_ADDR}/v1/{secret_path}'
