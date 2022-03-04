@@ -37,7 +37,8 @@ class VaultEnv():
         self._credentials = credentials
         self._credentials.refresh(Request())
         if not self.service_account_email:
-            self.service_account_email = self._credentials.service_account_email       
+            if hasattr(self._credentials, "service_account_email"):
+                self.service_account_email = self._credentials.service_account_email       
         return self._credentials
 
     def get_jwt(self):
@@ -93,22 +94,41 @@ class VaultEnv():
                 else:
                     os.environ[k] = v
 
-        url = f'{VAULT_ADDR}/v1/kv/data/{db_role}/mongodb'
-        r = requests.request("GET", url=url, headers=headers)
-        r.raise_for_status()
-        secretdata = r.json()
-        secrets = secretdata['data']['data']
+        if db_role:
+            url = f'{VAULT_ADDR}/v1/kv/data/{db_role}/mongodb'
+            r = requests.request("GET", url=url, headers=headers)        
+            r.raise_for_status()
+            secretdata = r.json()
+            secrets = secretdata['data']['data']
 
-        if fp:
-            fp.write(f"MONGODB_USERNAME={secrets['username']}\n")
-            fp.write(f"MONGODB_PASSWORD={secrets['password']}\n")
-            fp.close()
-        else:
-            os.environ['MONGODB_USERNAME'] = secrets['username']
-            os.environ['MONGODB_PASSWORD'] = secrets['password']
+            if fp:
+                fp.write(f"MONGODB_USERNAME={secrets['username']}\n")
+                fp.write(f"MONGODB_PASSWORD={secrets['password']}\n")
+                fp.close()
+            else:
+                os.environ['MONGODB_USERNAME'] = secrets['username']
+                os.environ['MONGODB_PASSWORD'] = secrets['password']
         
 
         print(f'Finished Retrieving Secrets')
+
+    def get_secret(secret_path, vault_token=None):
+        vault_token = vault_token or self.vault_token
+        headers = {"X-Vault-Token": vault_token}
+        url = f'{VAULT_ADDR}/v1/{secret_path}'
+        r = requests.request("GET", url=url, headers=headers)
+        r.raise_for_status()
+        secretdata = r.json()
+        return secretdata
+    
+    def update_secret(secret_path, data, vault_token=None):
+        vault_token = vault_token or self.vault_token
+        headers = {"X-Vault-Token": vault_token}
+        url = f'{VAULT_ADDR}/v1/{secret_path}'
+        r = requests.request("POST", url=url, data=data, headers=headers)
+        r.raise_for_status()
+        secretdata = r.json()
+        return secretdata
 
     def logout(self):
         headers = {"X-Vault-Token": self.vault_token}
