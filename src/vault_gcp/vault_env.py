@@ -16,9 +16,16 @@ SECRET_OUTPUT = os.environ.get("SECRET_OUTPUT", "env")
 class VaultEnv():
     def __init__(self, *args, **kwargs) -> None:
         self.vault_token = None
+        self._auth_token = None
         self._credentials = None
         self._jwt_token = None
         self.service_account_email = kwargs.get('service_account_email', DEFAULT_SERVICE_ACCOUNT_EMAIL)
+
+    @property
+    def auth_token(self):
+        if not self._auth_token:
+            self._auth_token = self.vault_token
+        return self._auth_token
 
     @property
     def credentials(self):
@@ -67,7 +74,7 @@ class VaultEnv():
         r = requests.post(url, data=jwtdata)
         r.raise_for_status()
         tokendata = r.json()
-        self.vault_token = tokendata['auth']['client_token']
+        self.vault_token = self._auth_token = tokendata['auth']['client_token']
         return self.vault_token
 
     def load_secrets(self, app_role=APP_ROLE, db_role=CLIENT_ROLE, secret_output=SECRET_OUTPUT, output_file="/workspace/.ci.env"):
@@ -104,12 +111,12 @@ class VaultEnv():
             if fp:
                 fp.write(f"MONGODB_USERNAME={secrets['username']}\n")
                 fp.write(f"MONGODB_PASSWORD={secrets['password']}\n")
-                fp.close()
             else:
                 os.environ['MONGODB_USERNAME'] = secrets['username']
                 os.environ['MONGODB_PASSWORD'] = secrets['password']
         
-
+        if fp:
+            fp.close()
         print(f'Finished Retrieving Secrets')
 
     def get_secret(self, secret_path, vault_token=None):
@@ -130,8 +137,17 @@ class VaultEnv():
         secretdata = r.json()
         return secretdata
 
+    def request(self, method, path, data={}, vault_token=None):
+        vault_token = vault_token or self.vault_token
+        headers = {"X-Vault-Token": vault_token}
+        url = f'{VAULT_ADDR}/{path}'
+        r = requests.request(method, url=url, data=data, headers=headers)
+        r.raise_for_status()
+        secretdata = r.json()
+        return secretdata 
+
     def logout(self):
-        headers = {"X-Vault-Token": self.vault_token}
+        headers = {"X-Vault-Token": self.auth_token}
         url = f'{VAULT_ADDR}/v1/auth/token/revoke-self'
         r = requests.post(url=url, headers=headers)
         print(f'Revoked: {r.status_code}')
