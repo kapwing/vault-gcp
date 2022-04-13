@@ -137,14 +137,20 @@ class VaultEnv():
         secretdata = r.json()
         return secretdata
 
-    def request(self, method, path, data={}, vault_token=None):
+    def request(self, method, path, data={}, vault_token=None, return_request=False):
         vault_token = vault_token or self.vault_token
         headers = {"X-Vault-Token": vault_token}
         url = f'{VAULT_ADDR}/{path}'
         r = requests.request(method, url=url, data=data, headers=headers)
         r.raise_for_status()
-        secretdata = r.json()
-        return secretdata 
+        if return_request:
+            return r
+        try:
+            secretdata = r.json()
+            return secretdata 
+        except:
+            return r.content
+        
 
     def logout(self):
         headers = {"X-Vault-Token": self.auth_token}
