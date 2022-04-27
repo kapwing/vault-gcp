@@ -8,7 +8,13 @@ from google.auth.transport.requests import AuthorizedSession, Request
 VAULT_ADDR = os.environ.get('VAULT_ADDR')
 CLIENT_ROLE = os.environ.get("CLIENT_ROLE", "cloud_builder")
 AUDIENCE_URL = f'http://vault/{CLIENT_ROLE}'
-APP_ROLE = os.environ.get("APP_ROLE", "kapwing_processor")
+SERVICE_NAME = os.environ.get("SERVICE_NAME", "kapwing_scripts")
+SECRET_PREFIX = os.environ.get("SECRET_PREFIX", "engineering/services/")
+SECRET_PATH = os.environ.get("SECRET_PATH", f"{SECRET_PREFIX}{SERVICE_NAME}")
+
+VERSION_PREFIX = os.environ.get("VERSION_PREFIX", "engineering/services/")
+VERSION_PATH = os.environ.get("VERSION_PATH", f"{VERSION_PREFIX}{CLIENT_ROLE}")
+
 DEFAULT_SERVICE_ACCOUNT_EMAIL = os.environ.get("SERVICE_ACCOUNT_EMAIL")
 SECRET_OUTPUT = os.environ.get("SECRET_OUTPUT", "env")
 
@@ -77,9 +83,9 @@ class VaultEnv():
         self.vault_token = self._auth_token = tokendata['auth']['client_token']
         return self.vault_token
 
-    def load_secrets(self, app_role=APP_ROLE, db_role=CLIENT_ROLE, secret_output=SECRET_OUTPUT, output_file="/workspace/.ci.env"):
+    def load_secrets(self, secret_path=SECRET_PATH, version_path=VERSION_PATH, secret_output=SECRET_OUTPUT, output_file="/workspace/.ci.env"):
         headers = {"X-Vault-Token": self.vault_token}
-        url = f'{VAULT_ADDR}/v1/secret/{app_role}'
+        url = f'{VAULT_ADDR}/v1/secret/{secret_path}'
         r = requests.request("LIST", url=url, headers=headers)
         r.raise_for_status()
         secretdata = r.json()
@@ -90,7 +96,7 @@ class VaultEnv():
             fp = open(output_file, "w")
 
         for key in secret_keys:
-            url = f'{VAULT_ADDR}/v1/secret/{app_role}/{key}'
+            url = f'{VAULT_ADDR}/v1/secret/{secret_path}/{key}'
             r = requests.request("GET", url=url, headers=headers)
             r.raise_for_status()
             secretdata = r.json()
@@ -101,8 +107,8 @@ class VaultEnv():
                 else:
                     os.environ[k] = v
 
-        if db_role:
-            url = f'{VAULT_ADDR}/v1/kv/data/{db_role}/mongodb'
+        if version_path:
+            url = f'{VAULT_ADDR}/v1/kv/data/{version_path}/mongodb'
             r = requests.request("GET", url=url, headers=headers)        
             r.raise_for_status()
             secretdata = r.json()
