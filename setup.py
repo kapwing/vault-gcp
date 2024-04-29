@@ -21,7 +21,7 @@ setuptools.setup(
     packages=setuptools.find_packages(where="src"),
     install_requires=[
         "requests ==2.22.0",
-        "google-auth ==2.0.1"
+        "google-auth >=2.17.3"
     ],
     python_requires=">=3.6",
 )
