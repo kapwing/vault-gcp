@@ -77,11 +77,25 @@ class VaultEnv():
             "jwt": f"{self.jwt_token}"
         }
 
-        r = requests.post(url, data=jwtdata)
-        r.raise_for_status()
-        tokendata = r.json()
-        self.vault_token = self._auth_token = tokendata['auth']['client_token']
-        return self.vault_token
+        try:
+            r = requests.post(url, data=jwtdata, timeout=30)
+            r.raise_for_status()
+            tokendata = r.json()
+            self.vault_token = self._auth_token = tokendata['auth']['client_token']
+            return self.vault_token
+        except requests.exceptions.HTTPError as err:
+            print(f"HTTP Error occurred: {err}")
+            raise
+        except requests.exceptions.ConnectionError as err:
+            print(f"Connection Error occurred: {err}")
+            raise
+        except requests.exceptions.Timeout as err:
+            print(f"Timeout Error occurred: {err}")
+            raise
+        except requests.exceptions.RequestException as err:
+            print(f"An unexpected error occurred: {err}")
+            raise
+        
 
     def load_secrets(self, secret_path=SECRET_PATH, version_path=VERSION_PATH, secret_output=SECRET_OUTPUT, output_file="/workspace/.ci.env"):
         headers = {"X-Vault-Token": self.vault_token}
@@ -156,13 +170,22 @@ class VaultEnv():
             return secretdata 
         except:
             return r.content
-        
 
     def logout(self):
         headers = {"X-Vault-Token": self.auth_token}
         url = f'{VAULT_ADDR}/v1/auth/token/revoke-self'
         r = requests.post(url=url, headers=headers)
         print(f'Revoked: {r.status_code}')
+
+    def validate_token(self, vault_token=None):
+        headers = {"X-Vault-Token": vault_token or self.auth_token}
+        url = f'{VAULT_ADDR}/v1/auth/token/lookup-self'
+        r = requests.request("GET", url=url, headers=headers)
+        r.raise_for_status()
+        data = r.json()
+        print(f'Valid: {r.status_code}')
+        return data
+
 
 
 if __name__ == '__main__':
