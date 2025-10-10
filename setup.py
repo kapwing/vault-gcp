@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="vault-gcp",
-    version="0.0.1",
+    version="0.0.2",
     author="Kevin Musselman",
     author_email="kevin@kapwing.com",
     description="Authenticate to vault and retrieve env vars",
@@ -20,8 +20,8 @@ setuptools.setup(
     package_dir={"": "src"},
     packages=setuptools.find_packages(where="src"),
     install_requires=[
-        "requests >=2.22.0",
-        "google-auth >=2.17.3"
+        "requests ==2.32.5",
+        "google-auth ==2.41.1"
     ],
     python_requires=">=3.6",
 )
