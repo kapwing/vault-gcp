@@ -46,7 +46,7 @@ class VaultEnv():
         return self._jwt_token
 
     def get_credentials(self):
-        credentials, project_id = google.auth.default(scopes='https://www.googleapis.com/auth/cloud-platform')        
+        credentials, project_id = google.auth.default(scopes='https://www.googleapis.com/auth/cloud-platform')
         self._credentials = credentials
         self._credentials.refresh(Request())
         if not self.service_account_email:
@@ -66,9 +66,17 @@ class VaultEnv():
 
         body = json.dumps({"payload": json.dumps(jwt_claim)})
 
-        token_response = authed_session.request('POST', metadata_server_url, data=body, headers=token_headers)
-        jwt = token_response.json()
-        return jwt['signedJwt']
+        resp = authed_session.request('POST', metadata_server_url, data=body, headers=token_headers)
+         # Surface helpful error messages
+        if resp.status_code != 200:
+            try:
+                err = resp.json()
+            except Exception:
+                err = {"raw": resp.text}
+            raise RuntimeError(f"signJwt failed: {resp.status_code} – {err}")
+
+        return resp.json()["signedJwt"]
+
 
     def login_vault(self):
         url = f'{VAULT_ADDR}/v1/auth/gcp/login'
