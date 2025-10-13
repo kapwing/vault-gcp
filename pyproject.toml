@@ -1,3 +1,7 @@
+[project]
+name = "vault_gcp"
+version = "0.0.3"
+
 [build-system]
 requires = [
     "setuptools>=42",
