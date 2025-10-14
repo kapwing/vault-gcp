@@ -93,6 +93,8 @@ class VaultEnv():
             return self.vault_token
         except requests.exceptions.HTTPError as err:
             print(f"HTTP Error occurred: {err}")
+            body = getattr(err.response, "text", "")
+            print(f"Response body: {body}")
             raise
         except requests.exceptions.ConnectionError as err:
             print(f"Connection Error occurred: {err}")
