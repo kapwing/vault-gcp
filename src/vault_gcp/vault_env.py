@@ -61,7 +61,7 @@ class VaultEnv():
         token_headers = {'content-type': 'application/json'}
 
         now = int(time.time())
-        expires = now + 900  # 15 mins in seconds, can't be longer.
+        expires = now + 850  # 15 mins in seconds, can't be longer.
         jwt_claim = {"aud": AUDIENCE_URL, "sub": self.service_account_email, "iat": now, "exp": expires}
 
         body = json.dumps({"payload": json.dumps(jwt_claim)})
