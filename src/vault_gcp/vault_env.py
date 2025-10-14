@@ -61,7 +61,7 @@ class VaultEnv():
         token_headers = {'content-type': 'application/json'}
 
         now = int(time.time())
-        expires = now + 900  # 15 mins in seconds, can't be longer.
+        expires = now + 850  # 15 mins minus 30 seconds (TTL must be less than 15 min, so leaves some buffer)
         jwt_claim = {"aud": AUDIENCE_URL, "sub": self.service_account_email, "iat": now, "exp": expires}
 
         body = json.dumps({"payload": json.dumps(jwt_claim)})
@@ -93,6 +93,8 @@ class VaultEnv():
             return self.vault_token
         except requests.exceptions.HTTPError as err:
             print(f"HTTP Error occurred: {err}")
+            body = getattr(err.response, "text", "")
+            print(f"Response body: {body}")
             raise
         except requests.exceptions.ConnectionError as err:
             print(f"Connection Error occurred: {err}")
