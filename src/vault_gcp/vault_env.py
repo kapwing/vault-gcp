@@ -5,18 +5,7 @@ import time
 import google.auth
 from google.auth.transport.requests import AuthorizedSession, Request
 
-VAULT_ADDR = os.environ.get('VAULT_ADDR')
-CLIENT_ROLE = os.environ.get("CLIENT_ROLE", "cloud_builder")
-AUDIENCE_URL = f'http://vault/{CLIENT_ROLE}'
-SERVICE_NAME = os.environ.get("SERVICE_NAME", "kapwing_scripts")
-SECRET_PREFIX = os.environ.get("SECRET_PREFIX", "engineering/services/")
-SECRET_PATH = os.environ.get("SECRET_PATH", f"{SECRET_PREFIX}{SERVICE_NAME}")
-
-VERSION_PREFIX = os.environ.get("VERSION_PREFIX", "engineering/services/")
-VERSION_PATH = os.environ.get("VERSION_PATH", f"{VERSION_PREFIX}{CLIENT_ROLE}")
-
-DEFAULT_SERVICE_ACCOUNT_EMAIL = os.environ.get("SERVICE_ACCOUNT_EMAIL")
-SECRET_OUTPUT = os.environ.get("SECRET_OUTPUT", "env")
+_DEFAULT = object()
 
 
 class VaultEnv():
@@ -25,13 +14,46 @@ class VaultEnv():
         self._auth_token = None
         self._credentials = None
         self._jwt_token = None
-        self.service_account_email = kwargs.get('service_account_email', DEFAULT_SERVICE_ACCOUNT_EMAIL)
+        self.service_account_email = kwargs.get(
+            'service_account_email',
+            os.environ.get("SERVICE_ACCOUNT_EMAIL"),
+        )
 
     @property
     def auth_token(self):
         if not self._auth_token:
             self._auth_token = self.vault_token
         return self._auth_token
+
+    @property
+    def vault_addr(self):
+        vault_addr = os.environ.get("VAULT_ADDR")
+        if not vault_addr:
+            raise RuntimeError("VAULT_ADDR is not set")
+        return vault_addr
+
+    @property
+    def client_role(self):
+        return os.environ.get("CLIENT_ROLE", "cloud_builder")
+
+    @property
+    def audience_url(self):
+        return f'http://vault/{self.client_role}'
+
+    @property
+    def secret_path(self):
+        secret_prefix = os.environ.get("SECRET_PREFIX", "engineering/services/")
+        service_name = os.environ.get("SERVICE_NAME", "kapwing_scripts")
+        return os.environ.get("SECRET_PATH", f"{secret_prefix}{service_name}")
+
+    @property
+    def version_path(self):
+        version_prefix = os.environ.get("VERSION_PREFIX", "engineering/services/")
+        return os.environ.get("VERSION_PATH", f"{version_prefix}{self.client_role}")
+
+    @property
+    def secret_output(self):
+        return os.environ.get("SECRET_OUTPUT", "env")
 
     @property
     def credentials(self):
@@ -62,7 +84,7 @@ class VaultEnv():
 
         now = int(time.time())
         expires = now + 850  # 15 mins minus 30 seconds (TTL must be less than 15 min, so leaves some buffer)
-        jwt_claim = {"aud": AUDIENCE_URL, "sub": self.service_account_email, "iat": now, "exp": expires}
+        jwt_claim = {"aud": self.audience_url, "sub": self.service_account_email, "iat": now, "exp": expires}
 
         body = json.dumps({"payload": json.dumps(jwt_claim)})
 
@@ -79,9 +101,9 @@ class VaultEnv():
 
 
     def login_vault(self):
-        url = f'{VAULT_ADDR}/v1/auth/gcp/login'
+        url = f'{self.vault_addr}/v1/auth/gcp/login'
         jwtdata = {
-            "role": CLIENT_ROLE,
+            "role": self.client_role,
             "jwt": f"{self.jwt_token}"
         }
 
@@ -107,9 +129,12 @@ class VaultEnv():
             raise
         
 
-    def load_secrets(self, secret_path=SECRET_PATH, version_path=VERSION_PATH, secret_output=SECRET_OUTPUT, output_file="/workspace/.ci.env"):
+    def load_secrets(self, secret_path=None, version_path=_DEFAULT, secret_output=None, output_file="/workspace/.ci.env"):
+        secret_path = secret_path or self.secret_path
+        version_path = self.version_path if version_path is _DEFAULT else version_path
+        secret_output = secret_output or self.secret_output
         headers = {"X-Vault-Token": self.vault_token}
-        url = f'{VAULT_ADDR}/v1/secret/{secret_path}'
+        url = f'{self.vault_addr}/v1/secret/{secret_path}'
         r = requests.request("LIST", url=url, headers=headers)
         r.raise_for_status()
         secretdata = r.json()
@@ -120,7 +145,7 @@ class VaultEnv():
             fp = open(output_file, "w")
 
         for key in secret_keys:
-            url = f'{VAULT_ADDR}/v1/secret/{secret_path}/{key}'
+            url = f'{self.vault_addr}/v1/secret/{secret_path}/{key}'
             r = requests.request("GET", url=url, headers=headers)
             r.raise_for_status()
             secretdata = r.json()
@@ -132,7 +157,7 @@ class VaultEnv():
                     os.environ[k] = v
 
         if version_path:
-            url = f'{VAULT_ADDR}/v1/kv/data/{version_path}/mongodb'
+            url = f'{self.vault_addr}/v1/kv/data/{version_path}/mongodb'
             r = requests.request("GET", url=url, headers=headers)        
             r.raise_for_status()
             secretdata = r.json()
@@ -152,7 +177,7 @@ class VaultEnv():
     def get_secret(self, secret_path, vault_token=None):
         vault_token = vault_token or self.vault_token
         headers = {"X-Vault-Token": vault_token}
-        url = f'{VAULT_ADDR}/v1/{secret_path}'
+        url = f'{self.vault_addr}/v1/{secret_path}'
         r = requests.request("GET", url=url, headers=headers)
         r.raise_for_status()
         secretdata = r.json()
@@ -161,7 +186,7 @@ class VaultEnv():
     def update_secret(self, secret_path, data, vault_token=None):
         vault_token = vault_token or self.vault_token
         headers = {"X-Vault-Token": vault_token}
-        url = f'{VAULT_ADDR}/v1/{secret_path}'
+        url = f'{self.vault_addr}/v1/{secret_path}'
         r = requests.request("POST", url=url, data=data, headers=headers)
         r.raise_for_status()
         secretdata = r.json()
@@ -170,7 +195,7 @@ class VaultEnv():
     def request(self, method, path, data={}, vault_token=None, return_request=False):
         vault_token = vault_token or self.vault_token
         headers = {"X-Vault-Token": vault_token}
-        url = f'{VAULT_ADDR}/{path}'
+        url = f'{self.vault_addr}/{path}'
         r = requests.request(method, url=url, data=data, headers=headers)
         r.raise_for_status()
         if return_request:
@@ -183,13 +208,13 @@ class VaultEnv():
 
     def logout(self):
         headers = {"X-Vault-Token": self.auth_token}
-        url = f'{VAULT_ADDR}/v1/auth/token/revoke-self'
+        url = f'{self.vault_addr}/v1/auth/token/revoke-self'
         r = requests.post(url=url, headers=headers)
         print(f'Revoked: {r.status_code}')
 
     def validate_token(self, vault_token=None):
         headers = {"X-Vault-Token": vault_token or self.auth_token}
-        url = f'{VAULT_ADDR}/v1/auth/token/lookup-self'
+        url = f'{self.vault_addr}/v1/auth/token/lookup-self'
         r = requests.request("GET", url=url, headers=headers)
         r.raise_for_status()
         data = r.json()
