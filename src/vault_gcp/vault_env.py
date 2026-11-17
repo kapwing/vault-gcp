@@ -134,8 +134,9 @@ class VaultEnv():
         version_path = self.version_path if version_path is _DEFAULT else version_path
         secret_output = secret_output or self.secret_output
         headers = {"X-Vault-Token": self.vault_token}
-        url = f'{self.vault_addr}/v1/secret/{secret_path}'
-        r = requests.request("LIST", url=url, headers=headers)
+        # GET ?list=true instead of LIST: Google load balancers reject the LIST method.
+        url = f'{self.vault_addr}/v1/secret/{secret_path}?list=true'
+        r = requests.get(url, headers=headers)
         r.raise_for_status()
         secretdata = r.json()
         secret_keys = secretdata['data']['keys']
